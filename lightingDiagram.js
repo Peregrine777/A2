@@ -32,6 +32,7 @@ function setupLightingDiagram() {
   twoLightsButton.position(20, 500);
   twoLightsButton.style("width", "180px"); // Set fixed width to prevent overflow
   twoLightsButton.style("display", "none"); // Initially hidden
+  twoLightsButton.hide(); // Use p5.js hide() method for more reliable hiding
   twoLightsButton.mousePressed(toggleTwoLights);
 
   // Setup slide navigation
@@ -1044,6 +1045,10 @@ function drawZDepthProblemsSlide() {
 
 function showLightingDiagramControls() {
   slideNavContainer.style("display", "block");
+  // Make sure the button is available to be shown by updateSlideButtons
+  if (twoLightsButton) {
+    twoLightsButton.show();
+  }
   updateSlideButtons(); // This will show/hide slide-specific controls based on current slide
 }
 
@@ -1052,5 +1057,9 @@ function hideLightingDiagramControls() {
   twoLightsButton.style("display", "none");
   if (samplingModeContainer) {
     samplingModeContainer.style("display", "none");
+  }
+  // Force hide the button explicitly to ensure it's not visible on main sketch
+  if (twoLightsButton) {
+    twoLightsButton.hide();
   }
 }

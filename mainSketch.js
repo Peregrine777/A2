@@ -345,6 +345,8 @@ function setupUtilityControls() {
   orthographicButton.style("margin-top", "8px");
   orthographicButton.mousePressed(() => {
     useOrthographic = !useOrthographic;
+    // Reset camera to initial position when toggling orthographic view
+    camera(0, 0, height / 2.0 / tan((PI * 30.0) / 180.0), 0, 0, 0, 0, 1, 0);
     console.log(
       "Orthographic projection:",
       useOrthographic ? "enabled" : "disabled"
