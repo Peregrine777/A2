@@ -1,22 +1,20 @@
-////////////////
-// Parameters //
-////////////////
+// #region Parameters
 let cols = 50;
 let rows = 50;
 let pixelSize = 10;
 let colStrength = 0.8; // Angular difference between RGB lights, recommend 0.7;
 let overSizePanels = 1.35; // to prevent gaps when rotated, range 1.0 to 1.5;
 let pixelAvg = 4; // We are downsampling, 1 for nearest pixel, higher for averaging
+let brightnessOffset = 900; // Offset for depth-based brightness positioning
+// #endregion
 
-/////////////////
-// Definitions //
-/////////////////
+// #region Variable Definitions
 let img;
 let imgPixels;
 let showSphere = false;
 let showReferenceImage = true; // Toggle for showing reference image overlay
-let useOrthographic = false; // Toggle for orthographic vs perspective projection
-let fileInput, sphereButton, orthographicButton, referenceImageCheckbox;
+let useOrthographic = true; // Toggle for orthographic vs perspective projection
+let fileInput, sphereButton, orthographicCheckbox, referenceImageCheckbox;
 let webImageDropdown;
 let lightTypeDropdown;
 let lightType = "RGB Lights"; // default light type
@@ -40,6 +38,7 @@ let webImages = [
   "https://images.pexels.com/photos/53141/rose-red-blossom-bloom-53141.jpeg",
   "https://images.pexels.com/photos/206893/pexels-photo-206893.jpeg",
   "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/RGB_combination_on_wall.png/1920px-RGB_combination_on_wall.png",
+  "https://d1uuxsymbea74i.cloudfront.net/images/cms/1_6_passport_photo_young_female_9061ba5533.jpg",
 ];
 
 // UI element references for hiding/showing
@@ -65,6 +64,8 @@ let gridResolutionSlider, gridResolutionValueDisplay;
 let panelSizeSlider, panelSizeValueDisplay;
 let colStrengthSlider, colStrengthValueDisplay;
 let overSizeAmountSlider, overSizeAmountValueDisplay;
+let brightnessOffsetSlider, brightnessOffsetValueDisplay;
+// #endregion
 
 function preloadMainSketch() {
   img = loadImage(
@@ -338,13 +339,18 @@ function setupUtilityControls() {
   sphereButton.class("btn");
   sphereButton.mousePressed(() => (showSphere = !showSphere));
 
-  // Orthographic projection toggle
-  orthographicButton = createButton("Toggle Orthographic View");
-  orthographicButton.parent(controlPanelContent);
-  orthographicButton.class("btn");
-  orthographicButton.style("margin-top", "8px");
-  orthographicButton.mousePressed(() => {
-    useOrthographic = !useOrthographic;
+  // Orthographic projection toggle checkbox
+  let orthographicContainer = createDiv("");
+  orthographicContainer.parent(controlPanelContent);
+  orthographicContainer.style("margin-top", "12px");
+  orthographicContainer.style("display", "flex");
+  orthographicContainer.style("align-items", "center");
+
+  orthographicCheckbox = createCheckbox("", useOrthographic);
+  orthographicCheckbox.parent(orthographicContainer);
+  orthographicCheckbox.style("margin-right", "8px");
+  orthographicCheckbox.changed(() => {
+    useOrthographic = orthographicCheckbox.checked();
     // Reset camera to initial position when toggling orthographic view
     camera(0, 0, height / 2.0 / tan((PI * 30.0) / 180.0), 0, 0, 0, 0, 1, 0);
     console.log(
@@ -352,6 +358,11 @@ function setupUtilityControls() {
       useOrthographic ? "enabled" : "disabled"
     );
   });
+
+  let orthographicLabel = createSpan("Orthographic View");
+  orthographicLabel.parent(orthographicContainer);
+  orthographicLabel.style("color", "rgba(255, 255, 255, 0.9)");
+  orthographicLabel.style("font-size", "14px");
 
   // Reference image toggle checkbox
   let referenceImageContainer = createDiv("");
@@ -526,6 +537,30 @@ function setupAdvancedOptions() {
     overSizeAmountValueDisplay.html(overSizePanels.toFixed(2));
     console.log("Panel overlap set to:", overSizePanels);
   });
+
+  // Brightness Offset (brightnessOffset)
+  let brightnessOffsetSliderGroup = createDiv("");
+  brightnessOffsetSliderGroup.parent(advancedOptionsContainer);
+  brightnessOffsetSliderGroup.class("slider-group");
+
+  let brightnessOffsetSliderLabel = createDiv("");
+  brightnessOffsetSliderLabel.parent(brightnessOffsetSliderGroup);
+  brightnessOffsetSliderLabel.class("slider-label");
+
+  let brightnessOffsetLabelText = createSpan("Brightness Offset");
+  brightnessOffsetLabelText.parent(brightnessOffsetSliderLabel);
+
+  brightnessOffsetValueDisplay = createSpan(brightnessOffset);
+  brightnessOffsetValueDisplay.parent(brightnessOffsetSliderLabel);
+  brightnessOffsetValueDisplay.class("slider-value");
+
+  brightnessOffsetSlider = createSlider(0, 2000, brightnessOffset, 50);
+  brightnessOffsetSlider.parent(brightnessOffsetSliderGroup);
+  brightnessOffsetSlider.input(() => {
+    brightnessOffset = brightnessOffsetSlider.value();
+    brightnessOffsetValueDisplay.html(brightnessOffset);
+    console.log("Brightness offset set to:", brightnessOffset);
+  });
 }
 
 function toggleAdvancedOptions() {
@@ -576,6 +611,7 @@ function getImageName(url, index) {
   if (url.includes("rose-red-blossom")) return "Red Rose";
   if (url.includes("pexels-photo-206893")) return "WinXP-esque";
   if (url.includes("RGB_combination")) return "RGB Light Demo";
+  if (url.includes("passport_photo_young_female")) return "Portrait";
   return `Image ${index + 1}`;
 }
 
@@ -656,20 +692,57 @@ function handleWebImageSelection() {
   }
 }
 
+function isMouseOverUI() {
+  // Check if mouse is over any UI panel
+  let controlPanelRect = controlPanel.elt.getBoundingClientRect();
+  let advancedPanelRect = null;
+
+  if (advancedOptionsPanel && isAdvancedOptionsVisible) {
+    advancedPanelRect = advancedOptionsPanel.elt.getBoundingClientRect();
+  }
+
+  // Check if mouse is within control panel bounds
+  if (
+    mouseX >= controlPanelRect.left &&
+    mouseX <= controlPanelRect.right &&
+    mouseY >= controlPanelRect.top &&
+    mouseY <= controlPanelRect.bottom
+  ) {
+    return true;
+  }
+
+  // Check if mouse is within advanced panel bounds (if visible)
+  if (
+    advancedPanelRect &&
+    mouseX >= advancedPanelRect.left &&
+    mouseX <= advancedPanelRect.right &&
+    mouseY >= advancedPanelRect.top &&
+    mouseY <= advancedPanelRect.bottom
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function drawMainSketch() {
   background(0);
-  orbitControl();
+
+  // Only enable orbit control if mouse is not over UI elements
+  if (!isMouseOverUI()) {
+    orbitControl();
+  }
 
   // Set camera projection
   if (useOrthographic) {
     // Set orthographic projection with extended far clipping plane
     // Parameters: left, right, bottom, top, near, far
     let scale = 400; // Adjust this to control zoom level in orthographic mode
-    ortho(-scale, scale, -scale, scale, -5000, 5000);
+    ortho(-scale, scale, -scale, scale, -5000, 50000);
   } else {
     // Set perspective projection with extended far clipping plane
     // Parameters: fovy, aspect, near, far
-    perspective(PI / 5, width / height, 1, 10000);
+    perspective(PI / 5, width / height, 1, 100000);
   }
 
   if (lightMode === "Point") {
@@ -677,7 +750,7 @@ function drawMainSketch() {
       // Use a single white point light
       pointLight(255, 255, 255, 0, 0, 500);
     } else if (lightType === "Ambient Light") {
-      let lightDistance = 400; // Distance of point lights from origin
+      let lightDistance = 900; // Distance of point lights from origin
       let redLightPos = p5.Vector.mult(redLight, lightDistance);
       redLightPos = p5.Vector.mult(redLightPos, -1);
       let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
@@ -697,13 +770,13 @@ function drawMainSketch() {
       pointLight(255, 255, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
     } else {
       //RGB Point lights
-      let lightDistance = 800; // Distance of point lights from origin
+      let lightDistance = 1000; // Distance of point lights from origin
       let redLightPos = p5.Vector.mult(redLight, lightDistance);
-      redLightPos = p5.Vector.mult(redLightPos, -1);
+      redLightPos = p5.Vector.mult(redLightPos, -1.0);
       let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
       greenLightPos = p5.Vector.mult(greenLightPos, -1);
       let blueLightPos = p5.Vector.mult(blueLight, lightDistance);
-      blueLightPos = p5.Vector.mult(blueLightPos, -1);
+      blueLightPos = p5.Vector.mult(blueLightPos, -0.8);
 
       // Draw light position indicators
       // push();
@@ -807,7 +880,8 @@ function drawMainSketch() {
         // clamp brightness
         pixelBrightness = constrain(pixelBrightness, 0, 1);
 
-        let distance = -calculateDepthFromBrightness(pixelBrightness) + 900;
+        let distance =
+          -calculateDepthFromBrightness(pixelBrightness) + brightnessOffset;
 
         // Move panel back based on calculated distance
         translate(0, 0, distance);

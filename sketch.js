@@ -27,12 +27,12 @@ function switchPage() {
     pageButton.html("View Main Sketch");
     hideMainSketchControls();
     showLightingDiagramControls();
-    
+
     // Hide reference image in diagram mode
     previousReferenceImageState = showReferenceImage; // Store current state
     showReferenceImage = false; // Hide reference image
     updateReferenceImageDisplay(); // Apply the change
-    
+
     // Reset camera for lighting diagram (2D view)
     resetCamera();
   } else {
@@ -40,7 +40,7 @@ function switchPage() {
     pageButton.html("View Making Of");
     showMainSketchControls();
     hideLightingDiagramControls();
-    
+
     // Restore reference image state when returning to main sketch
     if (previousReferenceImageState !== undefined) {
       showReferenceImage = previousReferenceImageState; // Restore previous state
@@ -50,7 +50,7 @@ function switchPage() {
         referenceImageCheckbox.checked(showReferenceImage);
       }
     }
-    
+
     // Reset camera when returning to main sketch
     resetCamera();
   }
