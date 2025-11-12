@@ -14,15 +14,20 @@ let pixelAvg = 4; // We are downsampling, 1 for nearest pixel, higher for averag
 let img;
 let imgPixels;
 let showSphere = false;
+let showReferenceImage = true; // Toggle for showing reference image overlay
 let useOrthographic = false; // Toggle for orthographic vs perspective projection
-let fileInput, sphereButton, orthographicButton;
+let fileInput, sphereButton, orthographicButton, referenceImageCheckbox;
 let webImageDropdown;
 let lightTypeDropdown;
 let lightType = "RGB Lights"; // default light type
 let lightMode = "Point"; // default light mode
 
+let falloffConstant = 0;
+let falloffLinear = 0.0001;
+let falloffQuadratic = 0.000003;
+
 let panelModeDropdown;
-let panelMode = "Color + Orientation"; // default panel mode
+let panelMode = "Depth-Based Brightness"; // default panel mode
 let avgSlider;
 let planeAngleOld, planeAngleNew;
 
@@ -54,6 +59,8 @@ let controlPanelContent;
 let advancedOptionsContainer;
 let isAdvancedOptionsVisible = false;
 let advancedToggleButton;
+let advancedOptionsPanel; // New separate panel for advanced options
+let advancedPanelMinimizeButton;
 let gridResolutionSlider, gridResolutionValueDisplay;
 let panelSizeSlider, panelSizeValueDisplay;
 let colStrengthSlider, colStrengthValueDisplay;
@@ -85,8 +92,10 @@ function setupMainSketch() {
 function setupUI() {
   // --- 2D overlay canvas ---
   overlay = createGraphics(200, 200); // small preview on top
-  overlay.position(0, 0);
   overlay.background(50);
+
+  // Initial setup for reference image display
+  updateReferenceImageDisplay();
 
   // --- 2D canvas for lighting diagram ---
   diagramCanvas = createGraphics(800, 800);
@@ -275,8 +284,8 @@ function setupLightingControls() {
 
   panelModeDropdown = createSelect();
   panelModeDropdown.parent(controlPanelContent);
-  panelModeDropdown.option("Color + Orientation");
   panelModeDropdown.option("Depth-Based Brightness");
+  panelModeDropdown.option("Color + Orientation");
   panelModeDropdown.changed(() => {
     panelMode = panelModeDropdown.value();
     console.log("Panel mode changed to:", panelMode);
@@ -342,6 +351,27 @@ function setupUtilityControls() {
     );
   });
 
+  // Reference image toggle checkbox
+  let referenceImageContainer = createDiv("");
+  referenceImageContainer.parent(controlPanelContent);
+  referenceImageContainer.style("margin-top", "12px");
+  referenceImageContainer.style("display", "flex");
+  referenceImageContainer.style("align-items", "center");
+
+  referenceImageCheckbox = createCheckbox("", showReferenceImage);
+  referenceImageCheckbox.parent(referenceImageContainer);
+  referenceImageCheckbox.style("margin-right", "8px");
+  referenceImageCheckbox.changed(() => {
+    showReferenceImage = referenceImageCheckbox.checked();
+    updateReferenceImageDisplay();
+    console.log("Reference image:", showReferenceImage ? "visible" : "hidden");
+  });
+
+  let referenceImageLabel = createSpan("Show Reference Image");
+  referenceImageLabel.parent(referenceImageContainer);
+  referenceImageLabel.style("color", "rgba(255, 255, 255, 0.9)");
+  referenceImageLabel.style("font-size", "14px");
+
   // Advanced options toggle button
   advancedToggleButton = createButton("Show Advanced Options");
   advancedToggleButton.parent(controlPanelContent);
@@ -353,21 +383,43 @@ function setupUtilityControls() {
   setupAdvancedOptions();
 }
 
+function updateReferenceImageDisplay() {
+  if (showReferenceImage && img) {
+    // Position overlay in top-right corner of the screen
+    overlay.position(width - overlay.width - 20, 20);
+    overlay.background(25);
+    overlay.image(img, 0, 0, overlay.width, overlay.height);
+    overlay.show();
+  } else {
+    overlay.hide();
+  }
+}
+
 function setupAdvancedOptions() {
+  // Create separate panel for advanced options
+  advancedOptionsPanel = createDiv("");
+  advancedOptionsPanel.class("control-panel");
+  advancedOptionsPanel.position(360, 20); // Position to the right of main panel
+  advancedOptionsPanel.style("display", "none"); // Initially hidden
+
+  // Create minimize button for advanced panel
+  advancedPanelMinimizeButton = createButton("−");
+  advancedPanelMinimizeButton.parent(advancedOptionsPanel);
+  advancedPanelMinimizeButton.class("minimize-btn");
+  advancedPanelMinimizeButton.mousePressed(toggleAdvancedOptions);
+
+  // Create advanced options content container
   advancedOptionsContainer = createDiv("");
-  advancedOptionsContainer.parent(controlPanelContent);
-  advancedOptionsContainer.style("display", "none");
-  advancedOptionsContainer.style("margin-top", "16px");
-  advancedOptionsContainer.style("padding", "16px");
-  advancedOptionsContainer.style("background", "rgba(255, 255, 255, 0.05)");
-  advancedOptionsContainer.style("border-radius", "8px");
-  advancedOptionsContainer.style(
-    "border",
-    "1px solid rgba(255, 255, 255, 0.1)"
-  );
+  advancedOptionsContainer.parent(advancedOptionsPanel);
 
   let advancedTitle = createDiv("Advanced Options");
   advancedTitle.parent(advancedOptionsContainer);
+  advancedTitle.style("margin", "0 0 20px 0");
+  advancedTitle.style("font-size", "18px");
+  advancedTitle.style("font-weight", "600");
+  advancedTitle.style("color", "#ffffff");
+  advancedTitle.style("border-bottom", "2px solid rgba(255, 255, 255, 0.1)");
+  advancedTitle.style("padding-bottom", "8px");
   advancedTitle.style("font-size", "14px");
   advancedTitle.style("font-weight", "500");
   advancedTitle.style("color", "rgba(255, 255, 255, 0.9)");
@@ -437,7 +489,7 @@ function setupAdvancedOptions() {
   colStrengthValueDisplay.parent(colStrengthSliderLabel);
   colStrengthValueDisplay.class("slider-value");
 
-  colStrengthSlider = createSlider(0.5, 1.0, colStrength, 0.05);
+  colStrengthSlider = createSlider(0.0, 1.0, colStrength, 0.05);
   colStrengthSlider.parent(colStrengthSliderGroup);
   colStrengthSlider.input(() => {
     colStrength = colStrengthSlider.value();
@@ -478,10 +530,10 @@ function toggleAdvancedOptions() {
   isAdvancedOptionsVisible = !isAdvancedOptionsVisible;
 
   if (isAdvancedOptionsVisible) {
-    advancedOptionsContainer.style("display", "block");
+    advancedOptionsPanel.style("display", "block");
     advancedToggleButton.html("Hide Advanced Options");
   } else {
-    advancedOptionsContainer.style("display", "none");
+    advancedOptionsPanel.style("display", "none");
     advancedToggleButton.html("Show Advanced Options");
   }
 }
@@ -535,6 +587,7 @@ function handleURLInput() {
         img = loadedImg;
         img.loadPixels();
         imgPixels = img.pixels;
+        updateReferenceImageDisplay(); // Update reference image display
         select("#loadUrlButton").removeClass("loading");
         console.log("Image loaded from URL:", url);
       },
@@ -575,6 +628,7 @@ function handleFile(file) {
   }
   img.loadPixels(); // Load pixel array once
   imgPixels = img.pixels; // Store reference to pixels array
+  updateReferenceImageDisplay(); // Update reference image display
 }
 
 function handleWebImageSelection() {
@@ -588,6 +642,7 @@ function handleWebImageSelection() {
         img = loadedImg;
         img.loadPixels();
         imgPixels = img.pixels;
+        updateReferenceImageDisplay(); // Update reference image display
         console.log("Image loaded from gallery:", selectedValue);
       },
       () => {
@@ -612,7 +667,7 @@ function drawMainSketch() {
   } else {
     // Set perspective projection with extended far clipping plane
     // Parameters: fovy, aspect, near, far
-    perspective(PI / 3, width / height, 1, 10000);
+    perspective(PI / 5, width / height, 1, 10000);
   }
 
   if (lightMode === "Point") {
@@ -640,7 +695,7 @@ function drawMainSketch() {
       pointLight(255, 255, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
     } else {
       //RGB Point lights
-      let lightDistance = 400; // Distance of point lights from origin
+      let lightDistance = 800; // Distance of point lights from origin
       let redLightPos = p5.Vector.mult(redLight, lightDistance);
       redLightPos = p5.Vector.mult(redLightPos, -1);
       let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
@@ -649,24 +704,24 @@ function drawMainSketch() {
       blueLightPos = p5.Vector.mult(blueLightPos, -1);
 
       // Draw light position indicators
-      push();
-      translate(redLightPos.x, redLightPos.y, redLightPos.z);
-      fill(255, 0, 0);
-      noStroke();
-      sphere(5);
-      pop();
-      push();
-      translate(greenLightPos.x, greenLightPos.y, greenLightPos.z);
-      fill(0, 255, 0);
-      noStroke();
-      sphere(5);
-      pop();
-      push();
-      translate(blueLightPos.x, blueLightPos.y, blueLightPos.z);
-      fill(0, 0, 255);
-      noStroke();
-      sphere(5);
-      pop();
+      // push();
+      // translate(redLightPos.x, redLightPos.y, redLightPos.z);
+      // fill(255, 0, 0);
+      // noStroke();
+      // sphere(5);
+      // pop();
+      // push();
+      // translate(greenLightPos.x, greenLightPos.y, greenLightPos.z);
+      // fill(0, 255, 0);
+      // noStroke();
+      // sphere(5);
+      // pop();
+      // push();
+      // translate(blueLightPos.x, blueLightPos.y, blueLightPos.z);
+      // fill(0, 0, 255);
+      // noStroke();
+      // sphere(5);
+      // pop();
 
       pointLight(255, 0, 0, redLightPos.x, redLightPos.y, redLightPos.z);
       pointLight(0, 255, 0, greenLightPos.x, greenLightPos.y, greenLightPos.z);
@@ -675,7 +730,7 @@ function drawMainSketch() {
       // Enhance light falloff for better distance-based dimming
       // Parameters: constant, linear, quadratic (higher quadratic = faster falloff)
       useFalloff = true;
-      lightFalloff(1, 0.0001, 0.000002);
+      lightFalloff(0, 0.00001, 0.0000015);
     }
   }
   if (lightMode === "Directional") {
@@ -699,16 +754,12 @@ function drawMainSketch() {
 
   if (!img) return;
 
-  overlay.background(25);
-  overlay.image(img, 0, 0, overlay.width, overlay.height);
+  // Update reference image display (this updates the 2D overlay canvas position and content)
+  if (showReferenceImage) {
+    updateReferenceImageDisplay();
+  }
 
-  // draw the overlay at top-left corner of main canvas
-  push();
-  resetMatrix(); // switch to 2D coordinates
-  image(overlay, -overlay.width / 2, height / 2 - overlay.height + 20);
-  pop();
-
-  // --- now draw cubes/planes ---
+  // Draw the array of planes
   let cellW = img.width / cols;
   let cellH = img.height / rows;
 
@@ -748,36 +799,27 @@ function drawMainSketch() {
       push();
       translate(x * pixelSize, y * pixelSize, 0);
 
-      let depth = 0;
-
       if (panelMode === "Depth-Based Brightness") {
         // Mode 2: White panels, brightness controlled by distance using inverse square law
         let pixelBrightness = brightness(c) / 255; // 0-1 range
+        // clamp brightness
+        pixelBrightness = constrain(pixelBrightness, 0, 1);
 
-        // Use inverse square law: brightness = 1 / (distance^2)
-        // Rearrange to find distance: distance = sqrt(1 / brightness)
-        // Add small offset to prevent division by zero
-        let targetBrightness = max(pixelBrightness, 0.01);
-        let distance = sqrt(1.0 / targetBrightness);
-
-        // Scale distance to reasonable values (adjust multiplier to taste)
-        let maxDistance = 1550;
-        let scaledDistance = -(distance * distance * 20); // Negative = further from viewer
-        scaledDistance = max(scaledDistance, -maxDistance); // Clamp maximum distance
+        let distance = -calculateDepthFromBrightness(pixelBrightness) + 900;
 
         // Move panel back based on calculated distance
-        translate(0, 0, scaledDistance);
+        translate(0, 0, distance);
 
         // Use pure white material
-        specularMaterial(200, 200, 200);
+        specularMaterial(255, 255, 255);
         shininess(1);
       } else {
         specularMaterial(brightness(c) * 1.4);
       }
       // Mode 1: Color + Orientation (original implementation)
-      let r = red(c) / 255;
-      let g = green(c) / 255;
-      let b = blue(c) / 255;
+      let r = constrain(red(c) / 255, 0, 1);
+      let g = constrain(green(c) / 255, 0, 1);
+      let b = constrain(blue(c) / 255, 0, 1);
 
       let norm = p5.Vector.mult(redLight, r)
         .add(p5.Vector.mult(greenLight, g))
@@ -800,6 +842,44 @@ function drawMainSketch() {
   }
 }
 
+function calculateDepthFromBrightness(brightnessValue) {
+  const constant = falloffConstant;
+  const linear = falloffLinear;
+  const quadratic = falloffQuadratic;
+
+  const inv = 1 / brightnessValue;
+
+  // Handle purely linear attenuation (no quadratic term)
+  if (Math.abs(quadratic) < 1e-8) {
+    const d = (inv - constant) / linear;
+    return d >= 0 ? d : null;
+  }
+
+  // Quadratic case: solve ax^2 + bx + c = 0
+  const a = quadratic;
+  const b = linear;
+  const c = constant - inv;
+
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) {
+    // No real solution — target brightness cannot be achieved
+    return null;
+  }
+
+  const sqrtDisc = Math.sqrt(discriminant);
+
+  // Numerically stable quadratic formula variant
+  const q = -0.5 * (b + Math.sign(b) * sqrtDisc);
+  const d1 = q / a;
+  const d2 = c / q;
+
+  // Pick the smallest non-negative distance
+  const candidates = [d1, d2].filter((d) => d >= 0 && Number.isFinite(d));
+  if (candidates.length === 0) return null;
+
+  return Math.min(...candidates);
+}
+
 function drawSphere() {
   push();
   translate(0, 0, 0);
@@ -812,10 +892,16 @@ function showMainSketchControls() {
   if (controlPanel) {
     controlPanel.style("display", "block");
   }
+  if (advancedOptionsPanel && isAdvancedOptionsVisible) {
+    advancedOptionsPanel.style("display", "block");
+  }
 }
 
 function hideMainSketchControls() {
   if (controlPanel) {
     controlPanel.style("display", "none");
+  }
+  if (advancedOptionsPanel) {
+    advancedOptionsPanel.style("display", "none");
   }
 }
