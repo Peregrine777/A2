@@ -18,6 +18,8 @@ let fileInput, sphereButton;
 let webImageDropdown;
 let lightTypeDropdown;
 let lightType = "RGB Lights"; // default light type
+let panelModeDropdown;
+let panelMode = "Color + Orientation"; // default panel mode
 let avgSlider;
 let planeAngleOld, planeAngleNew;
 
@@ -225,6 +227,7 @@ function setupPasteURL(parent) {
 }
 
 function setupLightingControls() {
+  // Lighting Mode Section
   let lightingTitle = createDiv("Lighting Mode");
   lightingTitle.parent(controlPanelContent);
   lightingTitle.style("font-size", "14px");
@@ -237,9 +240,28 @@ function setupLightingControls() {
   lightTypeDropdown.option("RGB Lights");
   lightTypeDropdown.option("White Light");
   lightTypeDropdown.option("Ambient Light");
+  lightTypeDropdown.option("Point Lights");
   lightTypeDropdown.changed(() => {
     lightType = lightTypeDropdown.value();
     console.log("Light type changed to:", lightType);
+  });
+
+  // Panel Mode Section
+  let panelTitle = createDiv("Panel Mode");
+  panelTitle.parent(controlPanelContent);
+  panelTitle.style("font-size", "14px");
+  panelTitle.style("font-weight", "500");
+  panelTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  panelTitle.style("margin-bottom", "12px");
+  panelTitle.style("margin-top", "16px");
+
+  panelModeDropdown = createSelect();
+  panelModeDropdown.parent(controlPanelContent);
+  panelModeDropdown.option("Color + Orientation");
+  panelModeDropdown.option("Depth-Based Brightness");
+  panelModeDropdown.changed(() => {
+    panelMode = panelModeDropdown.value();
+    console.log("Panel mode changed to:", panelMode);
   });
 }
 
@@ -558,10 +580,49 @@ function drawMainSketch() {
     directionalLight(255, 255, 255, redLight.x, redLight.y, redLight.z);
     directionalLight(255, 255, 255, greenLight.x, greenLight.y, greenLight.z);
     directionalLight(255, 255, 255, blueLight.x, blueLight.y, blueLight.z);
-  } else {
+  } else if (lightType === "RGB Lights") {
+    // directional rgb
     directionalLight(255, 0, 0, redLight.x, redLight.y, redLight.z);
     directionalLight(0, 255, 0, greenLight.x, greenLight.y, greenLight.z);
     directionalLight(0, 0, 255, blueLight.x, blueLight.y, blueLight.z);
+  } else {
+    // Point lights - NOTE: This doesn't work well with the current surface orientation system!
+    // The current system calculates surface normals using directional light vectors,
+    // but point lights need distance-based calculations from surface position to light position.
+    // For proper point light behavior, the surface orientation calculation would need to be
+    // completely rewritten to calculate vectors from each panel to each light position.
+
+    let lightDistance = 500; // Distance of point lights from origin
+    let redLightPos = p5.Vector.mult(redLight, lightDistance);
+    redLightPos = p5.Vector.mult(redLightPos, -1);
+    let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
+    greenLightPos = p5.Vector.mult(greenLightPos, -1);
+    let blueLightPos = p5.Vector.mult(blueLight, lightDistance);
+    blueLightPos = p5.Vector.mult(blueLightPos, -1);
+
+    // Draw light position indicators
+    push();
+    translate(redLightPos.x, redLightPos.y, redLightPos.z);
+    fill(255, 0, 0);
+    noStroke();
+    sphere(5);
+    pop();
+    push();
+    translate(greenLightPos.x, greenLightPos.y, greenLightPos.z);
+    fill(0, 255, 0);
+    noStroke();
+    sphere(5);
+    pop();
+    push();
+    translate(blueLightPos.x, blueLightPos.y, blueLightPos.z);
+    fill(0, 0, 255);
+    noStroke();
+    sphere(5);
+    pop();
+
+    pointLight(255, 0, 0, redLightPos.x, redLightPos.y, redLightPos.z);
+    pointLight(0, 255, 0, greenLightPos.x, greenLightPos.y, greenLightPos.z);
+    pointLight(0, 0, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
   }
 
   if (showSphere) drawSphere();
@@ -614,6 +675,35 @@ function drawMainSketch() {
       let avgC = color(sumR / count, sumG / count, sumB / count);
       c = avgC;
 
+      push();
+      translate(x * pixelSize, y * pixelSize, 0);
+
+      let depth = 0;
+
+      if (panelMode === "Depth-Based Brightness") {
+        // Mode 2: White panels, brightness controlled by distance using inverse square law
+        let pixelBrightness = brightness(c) / 255; // 0-1 range
+
+        // Use inverse square law: brightness = 1 / (distance^2)
+        // Rearrange to find distance: distance = sqrt(1 / brightness)
+        // Add small offset to prevent division by zero
+        let targetBrightness = max(pixelBrightness, 0.01);
+        let distance = sqrt(1.0 / targetBrightness);
+
+        // Scale distance to reasonable values (adjust multiplier to taste)
+        let maxDistance = 1550;
+        let scaledDistance = -(distance * distance * 55); // Negative = further from viewer
+        scaledDistance = max(scaledDistance, -maxDistance); // Clamp maximum distance
+
+        // Move panel back based on calculated distance
+        translate(0, 0, scaledDistance);
+
+        // Use pure white material
+        specularMaterial(155, 155, 155);
+      } else {
+        specularMaterial(brightness(c) * 1.4);
+      }
+      // Mode 1: Color + Orientation (original implementation)
       let r = red(c) / 255;
       let g = green(c) / 255;
       let b = blue(c) / 255;
@@ -625,11 +715,6 @@ function drawMainSketch() {
       if (norm.mag() > 0) norm.normalize();
       else norm = createVector(0, 1, 0);
 
-      push();
-      translate(x * pixelSize, y * pixelSize, 0);
-
-      specularMaterial(brightness(c) * 1.4);
-
       let axis = createVector(0, 0, 1).cross(norm);
       let angle = acos(createVector(0, 0, 1).dot(norm));
       if (axis.mag() > 0) {
@@ -637,7 +722,8 @@ function drawMainSketch() {
         rotate(angle, axis);
       }
 
-      plane(pixelSize * overSizePanels, pixelSize * overSizePanels); //magic number to (lazily) prevent gaps when rotated
+      plane(pixelSize * overSizePanels, pixelSize * overSizePanels);
+
       pop();
     }
   }
