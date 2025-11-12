@@ -53,7 +53,7 @@ function preloadMainSketch() {
 
 function setupMainSketch() {
   // --- WEBGL canvas ---
-  wgl = createCanvas(800, 800, WEBGL);
+  wgl = createCanvas(1000, 1000, WEBGL);
   wgl.position(0, 0); // background canvas
   noStroke();
 

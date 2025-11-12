@@ -5,6 +5,18 @@ let diagramLightDirection2;
 let twoLightsMode = false;
 let twoLightsButton;
 
+// Slide system variables
+let currentSlide = 1; // Start with Light Color Recreation slide (the original diagram)
+let totalSlides = 2; // 0: Pixel Averaging, 1: Light Color Recreation
+let slideButtons = [];
+let slideNavContainer;
+
+// Slide 0 variables (Pixel Averaging)
+let zoomLevel = 1;
+let selectedCellX = 30;
+let selectedCellY = 28;
+let showGrid = true;
+
 function setupLightingDiagram() {
   // Define light direction for diagram (pointing from light source toward the plane)
   diagramLightDirection = createVector(1, -1, 0).normalize(); // Top-right light (red)
@@ -13,10 +25,79 @@ function setupLightingDiagram() {
   // Button to toggle two lights mode with styling
   twoLightsButton = createButton("Add Second Light");
   twoLightsButton.class("btn btn-secondary");
-  twoLightsButton.position(20, 80);
+  twoLightsButton.position(20, 500);
   twoLightsButton.style("width", "180px"); // Set fixed width to prevent overflow
   twoLightsButton.style("display", "none"); // Initially hidden
   twoLightsButton.mousePressed(toggleTwoLights);
+
+  // Setup slide navigation
+  setupSlideNavigation();
+}
+
+function setupSlideNavigation() {
+  // Create container for slide buttons
+  slideNavContainer = createDiv("");
+  slideNavContainer.position(100, 0); // Position on canvas instead of full width
+  slideNavContainer.style("width", "auto");
+  slideNavContainer.style("display", "none"); // Initially hidden
+  slideNavContainer.style("z-index", "1000");
+  slideNavContainer.style("display-flex", "flex");
+  slideNavContainer.style("flex-direction", "row");
+  slideNavContainer.style("align-items", "center");
+  slideNavContainer.style("gap", "10px");
+
+  // Create slide buttons
+  let slideNames = ["Pixel Averaging", "Light Color Recreation"];
+
+  for (let i = 0; i < totalSlides; i++) {
+    let btn = createButton(slideNames[i]);
+    btn.parent(slideNavContainer);
+    btn.class("btn");
+    btn.style("margin", "0 5px");
+    btn.style("display", "inline-block");
+    btn.style("width", "200px"); // Fixed width to prevent stretching
+    btn.style("font-size", "12px");
+    btn.style("white-space", "nowrap"); // Prevent text wrapping
+
+    // Closure to capture the correct slide index
+    (function (slideIndex) {
+      btn.mousePressed(() => switchSlide(slideIndex));
+    })(i);
+
+    slideButtons.push(btn);
+  }
+
+  // Set initial active slide
+  updateSlideButtons();
+}
+
+function switchSlide(slideIndex) {
+  console.log("Switching to slide:", slideIndex);
+  currentSlide = slideIndex;
+  updateSlideButtons();
+}
+
+function updateSlideButtons() {
+  console.log("Current slide:", currentSlide);
+  // Update button styles to show active slide
+  for (let i = 0; i < slideButtons.length; i++) {
+    if (i === currentSlide) {
+      slideButtons[i].style(
+        "background",
+        "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      );
+    } else {
+      slideButtons[i].style("background", "rgba(255, 255, 255, 0.1)");
+    }
+  }
+
+  // Show/hide slide-specific controls
+  if (currentSlide === 1) {
+    // Light Color Recreation slide
+    twoLightsButton.style("display", "block");
+  } else {
+    twoLightsButton.style("display", "none");
+  }
 }
 
 function toggleTwoLights() {
@@ -29,6 +110,175 @@ function toggleTwoLights() {
 }
 
 function drawLightingDiagram() {
+  // Clear the main canvas
+  background(30);
+
+  // Draw the appropriate slide
+  switch (currentSlide) {
+    case 0:
+      drawPixelAveragingSlide();
+      break;
+    case 1:
+      drawLightColorRecreationSlide();
+      break;
+  }
+}
+
+function drawPixelAveragingSlide() {
+  // Draw on the 2D canvas
+  diagramCanvas.background(40);
+
+  let centerX = diagramCanvas.width / 2;
+  let centerY = diagramCanvas.height / 2;
+
+  // Draw title
+  diagramCanvas.fill(255);
+  diagramCanvas.textAlign(CENTER);
+  diagramCanvas.textSize(24);
+  diagramCanvas.text("Pixel Averaging & Grid Sampling", centerX, 50);
+
+  // Use the main sketch image if available
+  if (img) {
+    let displaySize = 300;
+    let imgX = centerX - displaySize / 2;
+    let imgY = 100;
+
+    // Draw the source image
+    diagramCanvas.image(img, imgX, imgY, displaySize, displaySize);
+
+    // Draw grid overlay
+    if (showGrid) {
+      let cellW = displaySize / cols;
+      let cellH = displaySize / rows;
+
+      diagramCanvas.stroke(255, 255, 0, 150);
+      diagramCanvas.strokeWeight(1);
+      diagramCanvas.noFill();
+
+      // Draw grid lines
+      for (let x = 0; x <= cols; x++) {
+        diagramCanvas.line(
+          imgX + x * cellW,
+          imgY,
+          imgX + x * cellW,
+          imgY + displaySize
+        );
+      }
+      for (let y = 0; y <= rows; y++) {
+        diagramCanvas.line(
+          imgX,
+          imgY + y * cellH,
+          imgX + displaySize,
+          imgY + y * cellH
+        );
+      }
+
+      // Highlight selected cell
+      let selectedX = imgX + selectedCellX * cellW;
+      let selectedY = imgY + selectedCellY * cellH;
+      diagramCanvas.stroke(255, 100, 100);
+      diagramCanvas.strokeWeight(3);
+      diagramCanvas.rect(selectedX, selectedY, cellW, cellH);
+
+      // Show zoomed cell
+      let zoomSize = 150;
+      let zoomX = centerX + 200;
+      let zoomY = 150;
+
+      // Calculate the actual pixel region
+      let actualCellW = img.width / cols;
+      let actualCellH = img.height / rows;
+      let srcX = selectedCellX * actualCellW;
+      let srcY = selectedCellY * actualCellH;
+
+      // Draw zoomed section
+      diagramCanvas.fill(60);
+      diagramCanvas.stroke(255);
+      diagramCanvas.strokeWeight(2);
+      diagramCanvas.rect(zoomX - 5, zoomY - 5, zoomSize + 10, zoomSize + 10);
+
+      // Copy and scale the selected region
+      let zoomedImg = img.get(srcX, srcY, actualCellW, actualCellH);
+      diagramCanvas.image(zoomedImg, zoomX, zoomY, zoomSize, zoomSize);
+
+      // Calculate and display average color
+      let avgR = 0,
+        avgG = 0,
+        avgB = 0;
+      let pixelCount = 0;
+
+      zoomedImg.loadPixels();
+      for (let i = 0; i < zoomedImg.pixels.length; i += 4) {
+        avgR += zoomedImg.pixels[i];
+        avgG += zoomedImg.pixels[i + 1];
+        avgB += zoomedImg.pixels[i + 2];
+        pixelCount++;
+      }
+
+      avgR = Math.round(avgR / pixelCount);
+      avgG = Math.round(avgG / pixelCount);
+      avgB = Math.round(avgB / pixelCount);
+
+      // Show average color swatch
+      diagramCanvas.fill(avgR, avgG, avgB);
+      diagramCanvas.noStroke();
+      diagramCanvas.rect(zoomX, zoomY + zoomSize + 20, zoomSize, 30);
+
+      // Labels and info
+      diagramCanvas.fill(255);
+      diagramCanvas.textAlign(LEFT);
+      diagramCanvas.textSize(14);
+      diagramCanvas.text("Selected Cell (Zoomed)", zoomX, zoomY - 10);
+      diagramCanvas.text(
+        `Average RGB: (${avgR}, ${avgG}, ${avgB})`,
+        zoomX,
+        zoomY + zoomSize + 70
+      );
+
+      // Info panel
+      let panelX = 50;
+      let panelY = diagramCanvas.height - 160;
+
+      diagramCanvas.fill(50, 50, 50, 200);
+      diagramCanvas.stroke(255);
+      diagramCanvas.strokeWeight(1);
+      diagramCanvas.rect(panelX - 10, panelY - 10, 400, 120);
+
+      diagramCanvas.fill(255);
+      diagramCanvas.noStroke();
+      diagramCanvas.textAlign(LEFT);
+      diagramCanvas.textSize(14);
+
+      diagramCanvas.text(`Grid Size: ${cols} x ${rows}`, panelX, panelY + 15);
+      diagramCanvas.text(
+        `Selected Cell: (${selectedCellX}, ${selectedCellY})`,
+        panelX,
+        panelY + 35
+      );
+      diagramCanvas.text(
+        `Pixel Averaging: ${pixelAvg}x${pixelAvg} samples per cell`,
+        panelX,
+        panelY + 55
+      );
+      diagramCanvas.text(
+        "Each grid cell averages multiple pixels to reduce noise",
+        panelX,
+        panelY + 75
+      );
+      diagramCanvas.text(
+        "and create smoother color transitions in the final result.",
+        panelX,
+        panelY + 95
+      );
+    }
+  }
+
+  // Display the 2D canvas on the main canvas
+  resetMatrix();
+  image(diagramCanvas, -width / 2, -height / 2);
+}
+
+function drawLightColorRecreationSlide() {
   // Clear the main canvas
   background(30);
 
@@ -312,9 +562,11 @@ function drawLightingDiagram() {
 }
 
 function showLightingDiagramControls() {
-  twoLightsButton.style("display", "block");
+  slideNavContainer.style("display", "block");
+  updateSlideButtons(); // This will show/hide slide-specific controls based on current slide
 }
 
 function hideLightingDiagramControls() {
+  slideNavContainer.style("display", "none");
   twoLightsButton.style("display", "none");
 }
