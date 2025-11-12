@@ -10,9 +10,12 @@ function setupLightingDiagram() {
   diagramLightDirection = createVector(1, -1, 0).normalize(); // Top-right light (red)
   diagramLightDirection2 = createVector(-1, -1, 0).normalize(); // Top-left light (blue)
 
-  // Button to toggle two lights mode
+  // Button to toggle two lights mode with styling
   twoLightsButton = createButton("Add Second Light");
-  twoLightsButton.position(450, 10);
+  twoLightsButton.class("btn btn-secondary");
+  twoLightsButton.position(20, 80);
+  twoLightsButton.style("width", "180px"); // Set fixed width to prevent overflow
+  twoLightsButton.style("display", "none"); // Initially hidden
   twoLightsButton.mousePressed(toggleTwoLights);
 }
 
@@ -179,27 +182,35 @@ function drawLightingDiagram() {
     diagramCanvas.pop();
   }
 
-  // Display information
-  diagramCanvas.fill(255);
+  // Display information with proper colors for each label
   diagramCanvas.textAlign(LEFT);
   diagramCanvas.textSize(16);
 
-  // Labels
+  // Labels with appropriate colors
+  diagramCanvas.fill(255, 150, 150); // Light red color for red light label
   diagramCanvas.text("Red Light", centerX + 210, centerY - 190);
+
   if (twoLightsMode) {
+    diagramCanvas.fill(150, 150, 255); // Light blue color for blue light label
     diagramCanvas.text("Blue Light", centerX - 280, centerY - 190);
   }
+
+  diagramCanvas.fill(255, 200, 200); // Light red for normal vector label
   diagramCanvas.text(
     "Normal Vector",
     centerX + normal.x * normalScale + 10,
     centerY + normal.y * normalScale - 10
   );
+
+  diagramCanvas.fill(255, 150, 150); // Light red for red light direction label
   diagramCanvas.text(
     "Red Light Direction",
     centerX + diagramLightDirection.x * lightScale + 10,
     centerY + diagramLightDirection.y * lightScale + 20
   );
+
   if (twoLightsMode) {
+    diagramCanvas.fill(150, 150, 255); // Light blue for blue light direction label
     diagramCanvas.text(
       "Blue Light Direction",
       centerX + diagramLightDirection2.x * lightScale - 120,

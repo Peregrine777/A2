@@ -1,9 +1,9 @@
 ////////////////
 // Parameters //
 ////////////////
-let cols = 40;
-let rows = 40;
-let pixelSize = 10;
+let cols = 50;
+let rows = 50;
+let pixelSize = 4;
 let colStrength = 0.8; // Angular difference between RGB lights, recommend 0.7;
 let overSizePanels = 1.35; // to prevent gaps when rotated, range 1.0 to 1.5;
 let pixelAvg = 4; // We are downsampling, 1 for nearest pixel, higher for averaging
@@ -35,6 +35,16 @@ let webImages = [
 // UI element references for hiding/showing
 let avgLabel, avgValueDisplay;
 
+// New UI variables
+let controlPanel;
+let fileSection;
+let fileModeButtons = {};
+let currentFileMode = "selectURL";
+let urlInput;
+let isControlPanelMinimized = false;
+let minimizeButton;
+let controlPanelContent;
+
 function preloadMainSketch() {
   img = loadImage(
     "https://images.pexels.com/photos/53141/rose-red-blossom-bloom-53141.jpeg"
@@ -47,6 +57,18 @@ function setupMainSketch() {
   wgl.position(0, 0); // background canvas
   noStroke();
 
+  setupUI();
+
+  // define RGB light directions (not using perceptual, so just a guess)
+  redLight = createVector(-colStrength, -colStrength, -1).normalize();
+  greenLight = createVector(colStrength, -colStrength, -1).normalize();
+  blueLight = createVector(-0.0, colStrength, -1).normalize();
+
+  img.loadPixels(); // Load pixel array once
+  imgPixels = img.pixels; // Store reference to pixels array
+}
+
+function setupUI() {
   // --- 2D overlay canvas ---
   overlay = createGraphics(200, 200); // small preview on top
   overlay.position(0, 0);
@@ -56,28 +78,153 @@ function setupMainSketch() {
   diagramCanvas = createGraphics(800, 800);
   diagramCanvas.background(30);
 
-  // Button to toggle test sphere
-  sphereButton = createButton("Toggle Sphere");
-  sphereButton.position(10, 10);
-  sphereButton.mousePressed(() => (showSphere = !showSphere));
+  // Create main control panel
+  controlPanel = createDiv("");
+  controlPanel.class("control-panel");
+  controlPanel.position(20, 20);
 
-  // File input for local images
-  fileInput = createFileInput(handleFile);
-  fileInput.position(10, 40);
+  // Create minimize button
+  minimizeButton = createButton("−");
+  minimizeButton.parent(controlPanel);
+  minimizeButton.class("minimize-btn");
+  minimizeButton.mousePressed(toggleControlPanel);
 
-  // Dropdown for web images
+  // Create control panel content container
+  controlPanelContent = createDiv("");
+  controlPanelContent.parent(controlPanel);
+
+  // Create control panel content
+  let title = createDiv("Plane Lighting Controls");
+  title.parent(controlPanelContent);
+  title.style("margin", "0 0 20px 0");
+  title.style("font-size", "18px");
+  title.style("font-weight", "600");
+  title.style("color", "#ffffff");
+  title.style("border-bottom", "2px solid rgba(255, 255, 255, 0.1)");
+  title.style("padding-bottom", "8px");
+
+  // File selection section
+  setupFileSelection();
+
+  // Section divider
+  let divider1 = createDiv("");
+  divider1.parent(controlPanelContent);
+  divider1.class("section-divider");
+
+  // Lighting controls
+  setupLightingControls();
+
+  // Section divider
+  let divider2 = createDiv("");
+  divider2.parent(controlPanelContent);
+  divider2.class("section-divider");
+
+  // Processing controls
+  setupProcessingControls();
+
+  // Section divider
+  let divider3 = createDiv("");
+  divider3.parent(controlPanelContent);
+  divider3.class("section-divider");
+
+  // Utility controls
+  setupUtilityControls();
+}
+
+function setupFileSelection() {
+  fileSection = createDiv("");
+  fileSection.parent(controlPanelContent);
+  fileSection.class("file-section");
+
+  let fileSectionTitle = createDiv("Image Source");
+  fileSectionTitle.parent(fileSection);
+  fileSectionTitle.style("font-size", "14px");
+  fileSectionTitle.style("font-weight", "500");
+  fileSectionTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  fileSectionTitle.style("margin-bottom", "12px");
+
+  // File mode selector buttons
+  let modeSelector = createDiv("");
+  modeSelector.parent(fileSection);
+  modeSelector.class("file-mode-selector");
+
+  // Create mode buttons
+  fileModeButtons.selectURL = createButton("Select URL");
+  fileModeButtons.selectURL.parent(modeSelector);
+  fileModeButtons.selectURL.class("file-mode-btn active");
+  fileModeButtons.selectURL.mousePressed(() => switchFileMode("selectURL"));
+
+  fileModeButtons.browse = createButton("Browse...");
+  fileModeButtons.browse.parent(modeSelector);
+  fileModeButtons.browse.class("file-mode-btn");
+  fileModeButtons.browse.mousePressed(() => switchFileMode("browse"));
+
+  fileModeButtons.pasteURL = createButton("Paste URL");
+  fileModeButtons.pasteURL.parent(modeSelector);
+  fileModeButtons.pasteURL.class("file-mode-btn");
+  fileModeButtons.pasteURL.mousePressed(() => switchFileMode("pasteURL"));
+
+  // File input area
+  let fileInputArea = createDiv("");
+  fileInputArea.parent(fileSection);
+  fileInputArea.class("file-input-area");
+  fileInputArea.id("fileInputArea");
+
+  // Create all input methods (initially hidden)
+  setupSelectURL(fileInputArea);
+  setupBrowseFile(fileInputArea);
+  setupPasteURL(fileInputArea);
+
+  // Show initial mode
+  switchFileMode("selectURL");
+}
+
+function setupSelectURL(parent) {
   webImageDropdown = createSelect();
-  webImageDropdown.position(10, 70);
-  webImageDropdown.option("Select an image");
-  webImages.forEach((url) => {
-    webImageDropdown.option(url);
+  webImageDropdown.parent(parent);
+  webImageDropdown.id("selectURL");
+  webImageDropdown.option("Choose from gallery...");
+  webImages.forEach((url, index) => {
+    let name = getImageName(url, index);
+    webImageDropdown.option(name, url);
   });
   webImageDropdown.changed(handleWebImageSelection);
+}
 
-  //Dropdown for light type
+function setupBrowseFile(parent) {
+  fileInput = createFileInput(handleFile);
+  fileInput.parent(parent);
+  fileInput.id("browse");
+  fileInput.attribute("accept", "image/*");
+  fileInput.style("display", "none");
+}
+
+function setupPasteURL(parent) {
+  urlInput = createInput("", "text");
+  urlInput.parent(parent);
+  urlInput.id("pasteURL");
+  urlInput.attribute("placeholder", "Paste image URL here...");
+  urlInput.style("display", "none");
+
+  let loadButton = createButton("Load Image");
+  loadButton.parent(parent);
+  loadButton.class("btn btn-secondary");
+  loadButton.style("display", "none");
+  loadButton.id("loadUrlButton");
+  loadButton.style("margin-top", "8px");
+  loadButton.mousePressed(handleURLInput);
+}
+
+function setupLightingControls() {
+  let lightingTitle = createDiv("Lighting Mode");
+  lightingTitle.parent(controlPanelContent);
+  lightingTitle.style("font-size", "14px");
+  lightingTitle.style("font-weight", "500");
+  lightingTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  lightingTitle.style("margin-bottom", "12px");
+
   lightTypeDropdown = createSelect();
-  // either rgb or white light
-  lightTypeDropdown.position(10, 100);
+  lightTypeDropdown.parent(controlPanelContent);
   lightTypeDropdown.option("RGB Lights");
   lightTypeDropdown.option("White Light");
   lightTypeDropdown.option("Ambient Light");
@@ -85,29 +232,134 @@ function setupMainSketch() {
     lightType = lightTypeDropdown.value();
     console.log("Light type changed to:", lightType);
   });
+}
 
-  //Slider for pixel averaging
+function setupProcessingControls() {
+  let processingTitle = createDiv("Processing Settings");
+  processingTitle.parent(controlPanelContent);
+  processingTitle.style("font-size", "14px");
+  processingTitle.style("font-weight", "500");
+  processingTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  processingTitle.style("margin-bottom", "12px");
+
+  // Pixel averaging slider with better styling
+  let sliderGroup = createDiv("");
+  sliderGroup.parent(controlPanelContent);
+  sliderGroup.class("slider-group");
+
+  let sliderLabel = createDiv("");
+  sliderLabel.parent(sliderGroup);
+  sliderLabel.class("slider-label");
+
+  let labelText = createSpan("Pixel Averaging");
+  labelText.parent(sliderLabel);
+
+  avgValueDisplay = createSpan(pixelAvg);
+  avgValueDisplay.parent(sliderLabel);
+  avgValueDisplay.class("slider-value");
+
   avgSlider = createSlider(1, 16, pixelAvg, 1);
-  avgSlider.position(10, 150);
+  avgSlider.parent(sliderGroup);
   avgSlider.input(() => {
     pixelAvg = avgSlider.value();
     console.log("Pixel averaging set to:", pixelAvg);
-    avgValueDisplay.html(pixelAvg); // Update the display value
+    avgValueDisplay.html(pixelAvg);
   });
-  // label for slider
-  avgLabel = createDiv("Pixel Averaging:");
-  avgLabel.position(10, 130);
-  // Value display for slider
-  avgValueDisplay = createDiv(pixelAvg);
-  avgValueDisplay.position(150, 150);
+}
 
-  // define RGB light directions (not using perceptual, so just a guess)
-  redLight = createVector(-colStrength, -colStrength, -1).normalize();
-  greenLight = createVector(colStrength, -colStrength, -1).normalize();
-  blueLight = createVector(-0.0, colStrength, -1).normalize();
+function setupUtilityControls() {
+  let utilityTitle = createDiv("Utilities");
+  utilityTitle.parent(controlPanelContent);
+  utilityTitle.style("font-size", "14px");
+  utilityTitle.style("font-weight", "500");
+  utilityTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  utilityTitle.style("margin-bottom", "12px");
 
-  img.loadPixels(); // Load pixel array once
-  imgPixels = img.pixels; // Store reference to pixels array
+  sphereButton = createButton("Toggle Test Sphere");
+  sphereButton.parent(controlPanelContent);
+  sphereButton.class("btn");
+  sphereButton.mousePressed(() => (showSphere = !showSphere));
+}
+
+function switchFileMode(mode) {
+  // Update button states
+  Object.keys(fileModeButtons).forEach((key) => {
+    if (key === mode) {
+      fileModeButtons[key].addClass("active");
+    } else {
+      fileModeButtons[key].removeClass("active");
+    }
+  });
+
+  // Hide all inputs
+  select("#selectURL").style("display", "none");
+  select("#browse").style("display", "none");
+  select("#pasteURL").style("display", "none");
+  select("#loadUrlButton").style("display", "none");
+
+  // Show selected input
+  currentFileMode = mode;
+  switch (mode) {
+    case "selectURL":
+      select("#selectURL").style("display", "block");
+      break;
+    case "browse":
+      select("#browse").style("display", "block");
+      break;
+    case "pasteURL":
+      select("#pasteURL").style("display", "block");
+      select("#loadUrlButton").style("display", "block");
+      break;
+  }
+}
+
+function getImageName(url, index) {
+  if (url.includes("rose-red-blossom")) return "Red Rose";
+  if (url.includes("pexels-photo-206893")) return "WinXP-esque";
+  if (url.includes("RGB_combination")) return "RGB Light Demo";
+  return `Image ${index + 1}`;
+}
+
+function handleURLInput() {
+  let url = urlInput.value().trim();
+  if (url) {
+    select("#loadUrlButton").addClass("loading");
+    loadImage(
+      url,
+      (loadedImg) => {
+        img = loadedImg;
+        img.loadPixels();
+        imgPixels = img.pixels;
+        select("#loadUrlButton").removeClass("loading");
+        console.log("Image loaded from URL:", url);
+      },
+      () => {
+        select("#loadUrlButton").removeClass("loading");
+        console.error("Failed to load image from URL:", url);
+        alert("Failed to load image. Please check the URL and try again.");
+      }
+    );
+  }
+}
+
+function toggleControlPanel() {
+  isControlPanelMinimized = !isControlPanelMinimized;
+
+  if (isControlPanelMinimized) {
+    // Minimize
+    controlPanelContent.style("display", "none");
+    controlPanel.style("width", "60px");
+    controlPanel.style("height", "60px");
+    minimizeButton.html("+");
+    minimizeButton.style("font-size", "20px");
+  } else {
+    // Expand
+    controlPanelContent.style("display", "block");
+    controlPanel.style("width", "320px");
+    controlPanel.style("height", "auto");
+    minimizeButton.html("−");
+    minimizeButton.style("font-size", "16px");
+  }
 }
 
 function handleFile(file) {
@@ -121,20 +373,22 @@ function handleFile(file) {
 }
 
 function handleWebImageSelection() {
-  let selectedUrl = webImageDropdown.value();
-  if (selectedUrl && selectedUrl !== "Select an image") {
+  let selectedValue = webImageDropdown.value();
+  if (selectedValue && selectedValue !== "Choose from gallery...") {
+    // selectedValue is now the actual URL since we set it as the option value
     loadImage(
-      selectedUrl,
+      selectedValue,
       (loadedImg) => {
         // success callback
         img = loadedImg;
         img.loadPixels();
         imgPixels = img.pixels;
-        console.log("Image loaded and pixels ready:", selectedUrl);
+        console.log("Image loaded from gallery:", selectedValue);
       },
       () => {
         // error callback
-        console.error("Failed to load image from URL:", selectedUrl);
+        console.error("Failed to load image from gallery:", selectedValue);
+        alert("Failed to load the selected image. Please try another one.");
       }
     );
   }
@@ -248,21 +502,13 @@ function drawSphere() {
 }
 
 function showMainSketchControls() {
-  sphereButton.style("display", "block");
-  fileInput.style("display", "block");
-  webImageDropdown.style("display", "block");
-  lightTypeDropdown.style("display", "block");
-  avgSlider.style("display", "block");
-  avgLabel.style("display", "block");
-  avgValueDisplay.style("display", "block");
+  if (controlPanel) {
+    controlPanel.style("display", "block");
+  }
 }
 
 function hideMainSketchControls() {
-  sphereButton.style("display", "none");
-  fileInput.style("display", "none");
-  webImageDropdown.style("display", "none");
-  lightTypeDropdown.style("display", "none");
-  avgSlider.style("display", "none");
-  avgLabel.style("display", "none");
-  avgValueDisplay.style("display", "none");
+  if (controlPanel) {
+    controlPanel.style("display", "none");
+  }
 }
