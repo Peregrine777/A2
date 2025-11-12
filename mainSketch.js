@@ -14,10 +14,13 @@ let pixelAvg = 4; // We are downsampling, 1 for nearest pixel, higher for averag
 let img;
 let imgPixels;
 let showSphere = false;
-let fileInput, sphereButton;
+let useOrthographic = false; // Toggle for orthographic vs perspective projection
+let fileInput, sphereButton, orthographicButton;
 let webImageDropdown;
 let lightTypeDropdown;
 let lightType = "RGB Lights"; // default light type
+let lightMode = "Point"; // default light mode
+
 let panelModeDropdown;
 let panelMode = "Color + Orientation"; // default panel mode
 let avgSlider;
@@ -240,10 +243,25 @@ function setupLightingControls() {
   lightTypeDropdown.option("RGB Lights");
   lightTypeDropdown.option("White Light");
   lightTypeDropdown.option("Ambient Light");
-  lightTypeDropdown.option("Point Lights");
   lightTypeDropdown.changed(() => {
     lightType = lightTypeDropdown.value();
     console.log("Light type changed to:", lightType);
+  });
+
+  // Light Mode Section
+  let lightModeTitle = createDiv("Light Source Type");
+  lightModeTitle.parent(controlPanelContent);
+  lightModeTitle.style("font-size", "14px");
+  lightModeTitle.style("font-weight", "500");
+  lightModeTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  lightModeTitle.style("margin-bottom", "12px");
+  let lightModeDropdown = createSelect();
+  lightModeDropdown.parent(controlPanelContent);
+  lightModeDropdown.option("Point");
+  lightModeDropdown.option("Directional");
+  lightModeDropdown.changed(() => {
+    lightMode = lightModeDropdown.value();
+    console.log("Light mode changed to:", lightMode);
   });
 
   // Panel Mode Section
@@ -310,6 +328,19 @@ function setupUtilityControls() {
   sphereButton.parent(controlPanelContent);
   sphereButton.class("btn");
   sphereButton.mousePressed(() => (showSphere = !showSphere));
+
+  // Orthographic projection toggle
+  orthographicButton = createButton("Toggle Orthographic View");
+  orthographicButton.parent(controlPanelContent);
+  orthographicButton.class("btn");
+  orthographicButton.style("margin-top", "8px");
+  orthographicButton.mousePressed(() => {
+    useOrthographic = !useOrthographic;
+    console.log(
+      "Orthographic projection:",
+      useOrthographic ? "enabled" : "disabled"
+    );
+  });
 
   // Advanced options toggle button
   advancedToggleButton = createButton("Show Advanced Options");
@@ -572,57 +603,96 @@ function drawMainSketch() {
   background(0);
   orbitControl();
 
-  if (lightType === "White Light") {
-    // Use a single white light
-    directionalLight(255, 255, 255, 0, 0, -1);
-  } else if (lightType === "Ambient Light") {
-    // Use ambient light
-    directionalLight(255, 255, 255, redLight.x, redLight.y, redLight.z);
-    directionalLight(255, 255, 255, greenLight.x, greenLight.y, greenLight.z);
-    directionalLight(255, 255, 255, blueLight.x, blueLight.y, blueLight.z);
-  } else if (lightType === "RGB Lights") {
-    // directional rgb
-    directionalLight(255, 0, 0, redLight.x, redLight.y, redLight.z);
-    directionalLight(0, 255, 0, greenLight.x, greenLight.y, greenLight.z);
-    directionalLight(0, 0, 255, blueLight.x, blueLight.y, blueLight.z);
+  // Set camera projection
+  if (useOrthographic) {
+    // Set orthographic projection with extended far clipping plane
+    // Parameters: left, right, bottom, top, near, far
+    let scale = 400; // Adjust this to control zoom level in orthographic mode
+    ortho(-scale, scale, -scale, scale, -5000, 5000);
   } else {
-    // Point lights - NOTE: This doesn't work well with the current surface orientation system!
-    // The current system calculates surface normals using directional light vectors,
-    // but point lights need distance-based calculations from surface position to light position.
-    // For proper point light behavior, the surface orientation calculation would need to be
-    // completely rewritten to calculate vectors from each panel to each light position.
+    // Set perspective projection with extended far clipping plane
+    // Parameters: fovy, aspect, near, far
+    perspective(PI / 3, width / height, 1, 10000);
+  }
 
-    let lightDistance = 500; // Distance of point lights from origin
-    let redLightPos = p5.Vector.mult(redLight, lightDistance);
-    redLightPos = p5.Vector.mult(redLightPos, -1);
-    let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
-    greenLightPos = p5.Vector.mult(greenLightPos, -1);
-    let blueLightPos = p5.Vector.mult(blueLight, lightDistance);
-    blueLightPos = p5.Vector.mult(blueLightPos, -1);
+  if (lightMode === "Point") {
+    if (lightType === "White Light") {
+      // Use a single white point light
+      pointLight(255, 255, 255, 0, 0, 500);
+    } else if (lightType === "Ambient Light") {
+      let lightDistance = 400; // Distance of point lights from origin
+      let redLightPos = p5.Vector.mult(redLight, lightDistance);
+      redLightPos = p5.Vector.mult(redLightPos, -1);
+      let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
+      greenLightPos = p5.Vector.mult(greenLightPos, -1);
+      let blueLightPos = p5.Vector.mult(blueLight, lightDistance);
+      blueLightPos = p5.Vector.mult(blueLightPos, -1);
 
-    // Draw light position indicators
-    push();
-    translate(redLightPos.x, redLightPos.y, redLightPos.z);
-    fill(255, 0, 0);
-    noStroke();
-    sphere(5);
-    pop();
-    push();
-    translate(greenLightPos.x, greenLightPos.y, greenLightPos.z);
-    fill(0, 255, 0);
-    noStroke();
-    sphere(5);
-    pop();
-    push();
-    translate(blueLightPos.x, blueLightPos.y, blueLightPos.z);
-    fill(0, 0, 255);
-    noStroke();
-    sphere(5);
-    pop();
+      pointLight(255, 255, 255, redLightPos.x, redLightPos.y, redLightPos.z);
+      pointLight(
+        255,
+        255,
+        255,
+        greenLightPos.x,
+        greenLightPos.y,
+        greenLightPos.z
+      );
+      pointLight(255, 255, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
+    } else {
+      //RGB Point lights
+      let lightDistance = 400; // Distance of point lights from origin
+      let redLightPos = p5.Vector.mult(redLight, lightDistance);
+      redLightPos = p5.Vector.mult(redLightPos, -1);
+      let greenLightPos = p5.Vector.mult(greenLight, lightDistance);
+      greenLightPos = p5.Vector.mult(greenLightPos, -1);
+      let blueLightPos = p5.Vector.mult(blueLight, lightDistance);
+      blueLightPos = p5.Vector.mult(blueLightPos, -1);
 
-    pointLight(255, 0, 0, redLightPos.x, redLightPos.y, redLightPos.z);
-    pointLight(0, 255, 0, greenLightPos.x, greenLightPos.y, greenLightPos.z);
-    pointLight(0, 0, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
+      // Draw light position indicators
+      push();
+      translate(redLightPos.x, redLightPos.y, redLightPos.z);
+      fill(255, 0, 0);
+      noStroke();
+      sphere(5);
+      pop();
+      push();
+      translate(greenLightPos.x, greenLightPos.y, greenLightPos.z);
+      fill(0, 255, 0);
+      noStroke();
+      sphere(5);
+      pop();
+      push();
+      translate(blueLightPos.x, blueLightPos.y, blueLightPos.z);
+      fill(0, 0, 255);
+      noStroke();
+      sphere(5);
+      pop();
+
+      pointLight(255, 0, 0, redLightPos.x, redLightPos.y, redLightPos.z);
+      pointLight(0, 255, 0, greenLightPos.x, greenLightPos.y, greenLightPos.z);
+      pointLight(0, 0, 255, blueLightPos.x, blueLightPos.y, blueLightPos.z);
+
+      // Enhance light falloff for better distance-based dimming
+      // Parameters: constant, linear, quadratic (higher quadratic = faster falloff)
+      useFalloff = true;
+      lightFalloff(1, 0.0001, 0.000002);
+    }
+  }
+  if (lightMode === "Directional") {
+    if (lightType === "White Light") {
+      // Use a single white light
+      directionalLight(255, 255, 255, 0, 0, -1);
+    } else if (lightType === "Ambient Light") {
+      // Use ambient light
+      directionalLight(255, 255, 255, redLight.x, redLight.y, redLight.z);
+      directionalLight(255, 255, 255, greenLight.x, greenLight.y, greenLight.z);
+      directionalLight(255, 255, 255, blueLight.x, blueLight.y, blueLight.z);
+    } else {
+      // directional rgb
+      directionalLight(255, 0, 0, redLight.x, redLight.y, redLight.z);
+      directionalLight(0, 255, 0, greenLight.x, greenLight.y, greenLight.z);
+      directionalLight(0, 0, 255, blueLight.x, blueLight.y, blueLight.z);
+    }
   }
 
   if (showSphere) drawSphere();
@@ -692,14 +762,15 @@ function drawMainSketch() {
 
         // Scale distance to reasonable values (adjust multiplier to taste)
         let maxDistance = 1550;
-        let scaledDistance = -(distance * distance * 55); // Negative = further from viewer
+        let scaledDistance = -(distance * distance * 20); // Negative = further from viewer
         scaledDistance = max(scaledDistance, -maxDistance); // Clamp maximum distance
 
         // Move panel back based on calculated distance
         translate(0, 0, scaledDistance);
 
         // Use pure white material
-        specularMaterial(155, 155, 155);
+        specularMaterial(200, 200, 200);
+        shininess(1);
       } else {
         specularMaterial(brightness(c) * 1.4);
       }
@@ -728,8 +799,6 @@ function drawMainSketch() {
     }
   }
 }
-
-// TODO: Plane angle function
 
 function drawSphere() {
   push();
