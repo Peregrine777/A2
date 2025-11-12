@@ -3,7 +3,7 @@
 ////////////////
 let cols = 50;
 let rows = 50;
-let pixelSize = 4;
+let pixelSize = 10;
 let colStrength = 0.8; // Angular difference between RGB lights, recommend 0.7;
 let overSizePanels = 1.35; // to prevent gaps when rotated, range 1.0 to 1.5;
 let pixelAvg = 4; // We are downsampling, 1 for nearest pixel, higher for averaging
@@ -44,6 +44,15 @@ let urlInput;
 let isControlPanelMinimized = false;
 let minimizeButton;
 let controlPanelContent;
+
+// Advanced options variables
+let advancedOptionsContainer;
+let isAdvancedOptionsVisible = false;
+let advancedToggleButton;
+let gridResolutionSlider, gridResolutionValueDisplay;
+let panelSizeSlider, panelSizeValueDisplay;
+let colStrengthSlider, colStrengthValueDisplay;
+let overSizeAmountSlider, overSizeAmountValueDisplay;
 
 function preloadMainSketch() {
   img = loadImage(
@@ -279,6 +288,149 @@ function setupUtilityControls() {
   sphereButton.parent(controlPanelContent);
   sphereButton.class("btn");
   sphereButton.mousePressed(() => (showSphere = !showSphere));
+
+  // Advanced options toggle button
+  advancedToggleButton = createButton("Show Advanced Options");
+  advancedToggleButton.parent(controlPanelContent);
+  advancedToggleButton.class("btn btn-secondary");
+  advancedToggleButton.style("margin-top", "12px");
+  advancedToggleButton.mousePressed(toggleAdvancedOptions);
+
+  // Advanced options container (initially hidden)
+  setupAdvancedOptions();
+}
+
+function setupAdvancedOptions() {
+  advancedOptionsContainer = createDiv("");
+  advancedOptionsContainer.parent(controlPanelContent);
+  advancedOptionsContainer.style("display", "none");
+  advancedOptionsContainer.style("margin-top", "16px");
+  advancedOptionsContainer.style("padding", "16px");
+  advancedOptionsContainer.style("background", "rgba(255, 255, 255, 0.05)");
+  advancedOptionsContainer.style("border-radius", "8px");
+  advancedOptionsContainer.style(
+    "border",
+    "1px solid rgba(255, 255, 255, 0.1)"
+  );
+
+  let advancedTitle = createDiv("Advanced Options");
+  advancedTitle.parent(advancedOptionsContainer);
+  advancedTitle.style("font-size", "14px");
+  advancedTitle.style("font-weight", "500");
+  advancedTitle.style("color", "rgba(255, 255, 255, 0.9)");
+  advancedTitle.style("margin-bottom", "16px");
+
+  // Grid Resolution (combined cols/rows)
+  let gridSliderGroup = createDiv("");
+  gridSliderGroup.parent(advancedOptionsContainer);
+  gridSliderGroup.class("slider-group");
+
+  let gridSliderLabel = createDiv("");
+  gridSliderLabel.parent(gridSliderGroup);
+  gridSliderLabel.class("slider-label");
+
+  let gridLabelText = createSpan("Grid Resolution");
+  gridLabelText.parent(gridSliderLabel);
+
+  gridResolutionValueDisplay = createSpan(cols + "×" + rows);
+  gridResolutionValueDisplay.parent(gridSliderLabel);
+  gridResolutionValueDisplay.class("slider-value");
+
+  gridResolutionSlider = createSlider(10, 100, cols, 5);
+  gridResolutionSlider.parent(gridSliderGroup);
+  gridResolutionSlider.input(() => {
+    cols = rows = gridResolutionSlider.value(); // Keep grid square
+    gridResolutionValueDisplay.html(cols + "×" + rows);
+    console.log("Grid resolution set to:", cols + "x" + rows);
+  });
+
+  // Panel Size (pixelSize)
+  let panelSliderGroup = createDiv("");
+  panelSliderGroup.parent(advancedOptionsContainer);
+  panelSliderGroup.class("slider-group");
+
+  let panelSliderLabel = createDiv("");
+  panelSliderLabel.parent(panelSliderGroup);
+  panelSliderLabel.class("slider-label");
+
+  let panelLabelText = createSpan("Panel Size");
+  panelLabelText.parent(panelSliderLabel);
+
+  panelSizeValueDisplay = createSpan(pixelSize);
+  panelSizeValueDisplay.parent(panelSliderLabel);
+  panelSizeValueDisplay.class("slider-value");
+
+  panelSizeSlider = createSlider(2, 20, pixelSize, 1);
+  panelSizeSlider.parent(panelSliderGroup);
+  panelSizeSlider.input(() => {
+    pixelSize = panelSizeSlider.value();
+    panelSizeValueDisplay.html(pixelSize);
+    console.log("Panel size set to:", pixelSize);
+  });
+
+  // Color Strength (colStrength)
+  let colStrengthSliderGroup = createDiv("");
+  colStrengthSliderGroup.parent(advancedOptionsContainer);
+  colStrengthSliderGroup.class("slider-group");
+
+  let colStrengthSliderLabel = createDiv("");
+  colStrengthSliderLabel.parent(colStrengthSliderGroup);
+  colStrengthSliderLabel.class("slider-label");
+
+  let colStrengthLabelText = createSpan("Color Separation");
+  colStrengthLabelText.parent(colStrengthSliderLabel);
+
+  colStrengthValueDisplay = createSpan(colStrength.toFixed(2));
+  colStrengthValueDisplay.parent(colStrengthSliderLabel);
+  colStrengthValueDisplay.class("slider-value");
+
+  colStrengthSlider = createSlider(0.5, 1.0, colStrength, 0.05);
+  colStrengthSlider.parent(colStrengthSliderGroup);
+  colStrengthSlider.input(() => {
+    colStrength = colStrengthSlider.value();
+    colStrengthValueDisplay.html(colStrength.toFixed(2));
+    console.log("Color separation set to:", colStrength);
+    // Update light directions when colStrength changes
+    redLight = createVector(-colStrength, -colStrength, -1).normalize();
+    greenLight = createVector(colStrength, -colStrength, -1).normalize();
+    blueLight = createVector(-0.0, colStrength, -1).normalize();
+  });
+
+  // Oversize Amount (overSizePanels)
+  let oversizeSliderGroup = createDiv("");
+  oversizeSliderGroup.parent(advancedOptionsContainer);
+  oversizeSliderGroup.class("slider-group");
+
+  let oversizeSliderLabel = createDiv("");
+  oversizeSliderLabel.parent(oversizeSliderGroup);
+  oversizeSliderLabel.class("slider-label");
+
+  let oversizeLabelText = createSpan("Panel Overlap");
+  oversizeLabelText.parent(oversizeSliderLabel);
+
+  overSizeAmountValueDisplay = createSpan(overSizePanels.toFixed(2));
+  overSizeAmountValueDisplay.parent(oversizeSliderLabel);
+  overSizeAmountValueDisplay.class("slider-value");
+
+  overSizeAmountSlider = createSlider(1.0, 1.35, overSizePanels, 0.05);
+  overSizeAmountSlider.parent(oversizeSliderGroup);
+  overSizeAmountSlider.input(() => {
+    overSizePanels = overSizeAmountSlider.value();
+    overSizeAmountValueDisplay.html(overSizePanels.toFixed(2));
+    console.log("Panel overlap set to:", overSizePanels);
+  });
+}
+
+function toggleAdvancedOptions() {
+  isAdvancedOptionsVisible = !isAdvancedOptionsVisible;
+
+  if (isAdvancedOptionsVisible) {
+    advancedOptionsContainer.style("display", "block");
+    advancedToggleButton.html("Hide Advanced Options");
+  } else {
+    advancedOptionsContainer.style("display", "none");
+    advancedToggleButton.html("Show Advanced Options");
+  }
 }
 
 function switchFileMode(mode) {
